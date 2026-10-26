@@ -7,6 +7,7 @@ import {
   crearEmpresaPlataforma,
   editarEmpresaPlataforma,
   restablecerPasswordEmpresa,
+  enviarCorreoPrueba,
 } from '../api.js'
 import { useConfig } from '../context/ConfigContext.jsx'
 import Marca from '../components/Marca.jsx'
@@ -90,6 +91,17 @@ function EmpresaModal({ empresa, dominioBase, onClose, onSaved }) {
       setError(err.message || 'No se pudo guardar')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handlePrueba() {
+    setError('')
+    setAviso('')
+    try {
+      const r = await enviarCorreoPrueba(empresa.subdominio)
+      setAviso(`Correo de prueba enviado a ${r.enviado_a.join(', ')} (remitente: ${r.remitente}).`)
+    } catch (err) {
+      setError(err.message || 'No se pudo enviar el correo de prueba')
     }
   }
 
@@ -251,8 +263,19 @@ function EmpresaModal({ empresa, dominioBase, onClose, onSaved }) {
                 <input type="url" value={logoUrl} onChange={(e) => setLogoUrl(e.target.value)} placeholder="https://..." />
               </div>
               <div className="field" style={{ flex: 1 }}>
-                <label>Correo para alertas</label>
-                <input type="email" value={correoAlertas} onChange={(e) => setCorreoAlertas(e.target.value)} />
+                <label>Correo(s) para alertas</label>
+                <input
+                  type="email"
+                  multiple
+                  value={correoAlertas}
+                  onChange={(e) => setCorreoAlertas(e.target.value)}
+                  placeholder="uno@empresa.com, otro@empresa.com"
+                />
+                {esEdicion && (
+                  <button type="button" className="btn-ghost" style={{ fontSize: 10.5, padding: '3px 8px', marginTop: 6 }} onClick={handlePrueba}>
+                    Enviar correo de prueba
+                  </button>
+                )}
               </div>
             </div>
 

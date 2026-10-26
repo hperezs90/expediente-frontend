@@ -207,5 +207,7 @@ export const crearEmpresaPlataforma = (data) =>
   plataformaRequest('/empresas', { method: 'POST', body: JSON.stringify(data) })
 export const editarEmpresaPlataforma = (subdominio, data) =>
   plataformaRequest(`/empresas/${subdominio}`, { method: 'PATCH', body: JSON.stringify(data) })
+export const enviarCorreoPrueba = (subdominio) =>
+  plataformaRequest(`/empresas/${subdominio}/correo-prueba`, { method: 'POST' })
 export const restablecerPasswordEmpresa = (subdominio, data) =>
   plataformaRequest(`/empresas/${subdominio}/restablecer-password`, { method: 'POST', body: JSON.stringify(data) })
