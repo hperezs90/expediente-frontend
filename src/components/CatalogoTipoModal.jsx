@@ -130,14 +130,18 @@ export default function CatalogoTipoModal({ tipo, categoriasExistentes = [], onC
             <div className="field">
               <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
                 <input type="checkbox" checked={esRecurrente} onChange={(e) => setEsRecurrente(e.target.checked)} />
-                Es recurrente
+                Es recurrente (obligación que se repite)
               </label>
             </div>
 
             {esRecurrente && (
               <div className="field">
-                <label>Frecuencia en días</label>
+                <label>Si no tiene vigencia, se repite cada (días)</label>
                 <input type="number" min="0" value={frecuenciaDias} onChange={(e) => setFrecuenciaDias(e.target.value)} />
+                <p className="mono" style={{ fontSize: 10.5, color: 'var(--ink-soft)', marginTop: 4 }}>
+                  Al marcar un trámite de este tipo como aprobado o finalizado, se crea solo el siguiente
+                  periodo: empieza cuando vence el actual (o tras estos días si no tiene vencimiento).
+                </p>
               </div>
             )}
 

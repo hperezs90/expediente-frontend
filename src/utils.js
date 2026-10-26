@@ -72,3 +72,9 @@ export function etiquetaCampo(campo) {
   if (obs) return `Observación N° ${obs[1]}`
   return CAMPO_LABELS[campo] || campo
 }
+
+// ¿Se ofrece "Renovar"? Tiene vencimiento dentro de la ventana (o ya venció), no se renovó y no fue rechazado.
+export function puedeRenovar({ fecha_vencimiento, renovado, estatus, ventanaDias }) {
+  if (!fecha_vencimiento || renovado || estatus === 'RECHAZADO') return false
+  return diasRestantes(fecha_vencimiento) <= ventanaDias
+}

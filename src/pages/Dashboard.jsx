@@ -3,8 +3,10 @@ import { Link, useNavigate } from 'react-router-dom'
 import Sidebar from '../components/Sidebar.jsx'
 import NuevaEmpresaModal from '../components/NuevaEmpresaModal.jsx'
 import NuevoTramiteModal from '../components/NuevoTramiteModal.jsx'
+import RenovarModal from '../components/RenovarModal.jsx'
 import { getProximosVencer, getEmpresas, getDashboardResumen, getUsuarios, buscarTramites } from '../api.js'
-import { tagClass, categoriaLabel, diasRestantes, estadoUrgencia, formatFecha } from '../utils.js'
+import { tagClass, categoriaLabel, diasRestantes, estadoUrgencia, formatFecha, puedeRenovar } from '../utils.js'
+import { useConfig } from '../context/ConfigContext.jsx'
 import { useUser } from '../context/UserContext.jsx'
 
 const VENTANAS = [
@@ -23,6 +25,9 @@ function formatFechaCorta(fechaISO) {
 
 export default function Dashboard() {
   const { user } = useUser()
+  const { ventana_renovacion_dias: ventanaRenovacion } = useConfig()
+  const [renovando, setRenovando] = useState(null)
+  const [soloPorRenovar, setSoloPorRenovar] = useState(false)
   const [tramites, setTramites] = useState([])
   const [resumen, setResumen] = useState({ total_empresas: 0, empresas_sin_tramites: 0 })
   const [loading, setLoading] = useState(true)
@@ -87,9 +92,18 @@ export default function Dashboard() {
     return () => clearTimeout(timeout)
   }, [busqueda])
 
+  const necesitaRenovar = (t) =>
+    puedeRenovar({
+      fecha_vencimiento: t.fecha_vencimiento,
+      renovado: t.renovado,
+      estatus: t.estatus_calculado,
+      ventanaDias: ventanaRenovacion,
+    })
+
   const filtrados = useMemo(() => {
     return tramites.filter((t) => {
       if (categoria !== 'todos' && t.categoria !== categoria) return false
+      if (soloPorRenovar && !necesitaRenovar(t)) return false
 
       // La ventana de días solo afecta a los que YA tienen fecha de vencimiento.
       // Los que todavía no la tienen (con una observación abierta, pendientes de aprobación, etc.)
@@ -100,7 +114,7 @@ export default function Dashboard() {
       }
       return true
     })
-  }, [tramites, categoria, ventana])
+  }, [tramites, categoria, ventana, soloPorRenovar, ventanaRenovacion])
 
   const categorias = useMemo(() => [...new Set(tramites.map((t) => t.categoria))].sort(), [tramites])
 
@@ -242,6 +256,9 @@ export default function Dashboard() {
             <div className={`chip ${categoria === 'todos' ? 'active' : ''}`} onClick={() => setCategoria('todos')}>
               Todos
             </div>
+            <div className={`chip ${soloPorRenovar ? 'active' : ''}`} onClick={() => setSoloPorRenovar(!soloPorRenovar)}>
+              Por renovar ({tramites.filter(necesitaRenovar).length})
+            </div>
             {categorias.map((c) => (
               <div key={c} className={`chip ${categoria === c ? 'active' : ''}`} onClick={() => setCategoria(c)}>
                 {categoriaLabel(c)}
@@ -330,12 +347,30 @@ export default function Dashboard() {
                     )}
                   </div>
                   <div>
-                    {fechaRelevante ? (
+                    {t.renovado ? (
+                      <span className="tag tag-c0">Renovado</span>
+                    ) : fechaRelevante ? (
                       <span className={`days ${urgencia.clase}`}>{urgencia.texto}</span>
                     ) : t.estatus_calculado ? (
                       <span className="tag tag-otros">{t.estatus_calculado}</span>
                     ) : (
                       <span style={{ color: 'var(--ink-soft)' }}>—</span>
+                    )}
+                    {necesitaRenovar(t) && (
+                      <div>
+                        <button
+                          type="button"
+                          className="btn-ghost"
+                          style={{ fontSize: 10.5, padding: '2px 8px', marginTop: 4 }}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            setRenovando(t)
+                          }}
+                        >
+                          Renovar
+                        </button>
+                      </div>
                     )}
                   </div>
                   <div className="mono" style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
@@ -354,6 +389,18 @@ export default function Dashboard() {
           onCreated={(empresa) => {
             setMostrarModal(false)
             navigate(`/empresas/${empresa.id}`)
+          }}
+        />
+      )}
+
+      {renovando && (
+        <RenovarModal
+          tramiteId={renovando.id}
+          tramiteNombre={renovando.tramite_nombre}
+          onClose={() => setRenovando(null)}
+          onRenovado={() => {
+            setRenovando(null)
+            cargarDashboard()
           }}
         />
       )}

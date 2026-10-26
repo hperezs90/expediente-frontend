@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { updateTramite, deleteTramite, getGestores, getAuditoriaTramite } from '../api.js'
-import { categoriaLabel, etiquetaCampo, sumarMeses } from '../utils.js'
+import { categoriaLabel, etiquetaCampo, sumarMeses, puedeRenovar } from '../utils.js'
+import { useConfig } from '../context/ConfigContext.jsx'
+import RenovarModal from './RenovarModal.jsx'
 import { useUser } from '../context/UserContext.jsx'
 import ObservacionesSection from './ObservacionesSection.jsx'
 import DocumentosSection from './DocumentosSection.jsx'
@@ -34,6 +36,8 @@ const SUBTITULO = { fontSize: 10.5, color: 'var(--ink-soft)', marginBottom: 6, l
 
 export default function EditarTramiteModal({ tramite: tramiteInicial, onClose, onUpdated, onDeleted }) {
   const { user } = useUser()
+  const { ventana_renovacion_dias: ventanaRenovacion } = useConfig()
+  const [renovando, setRenovando] = useState(false)
   const [tramite, setTramite] = useState(tramiteInicial)
   const [numeroExpediente, setNumeroExpediente] = useState(tramite.numero_expediente || '')
   const [descripcion, setDescripcion] = useState(tramite.descripcion || '')
@@ -163,6 +167,30 @@ export default function EditarTramiteModal({ tramite: tramiteInicial, onClose, o
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
             {error && <div className="error-msg">{error}</div>}
+
+            {tramite.renueva_a_id && (
+              <p className="mono" style={{ fontSize: 11, color: 'var(--ink-soft)', marginBottom: 12 }}>
+                Este trámite es la renovación (o el siguiente periodo) de uno anterior.
+              </p>
+            )}
+            {tramite.renovado_por_id ? (
+              <p className="mono" style={{ fontSize: 11, color: 'var(--seal-green)', marginBottom: 12 }}>
+                Ya tiene una renovación creada.
+              </p>
+            ) : (
+              puedeRenovar({
+                fecha_vencimiento: tramite.fecha_vencimiento,
+                renovado: false,
+                estatus: tramite.estatus_calculado,
+                ventanaDias: ventanaRenovacion,
+              }) && (
+                <div style={{ marginBottom: 14 }}>
+                  <button type="button" className="btn-primary" style={{ fontSize: 12 }} onClick={() => setRenovando(true)}>
+                    Renovar este trámite
+                  </button>
+                </div>
+              )
+            )}
 
             <div className="field">
               <label>Estado</label>
@@ -411,6 +439,18 @@ export default function EditarTramiteModal({ tramite: tramiteInicial, onClose, o
           </div>
         </form>
       </div>
+      {renovando && (
+        <RenovarModal
+          tramiteId={tramite.id}
+          tramiteNombre={tramite.tramite_nombre}
+          onClose={() => setRenovando(false)}
+          onRenovado={() => {
+            setRenovando(false)
+            onUpdated()
+            onClose()
+          }}
+        />
+      )}
     </div>
   )
 }

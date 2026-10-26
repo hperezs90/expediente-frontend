@@ -5,12 +5,16 @@ import NuevoTramiteModal from '../components/NuevoTramiteModal.jsx'
 import EditarTramiteModal from '../components/EditarTramiteModal.jsx'
 import GestoresAsignados from '../components/GestoresAsignados.jsx'
 import { getEmpresa, getTramitesDeEmpresa, getAuditoriaEmpresa } from '../api.js'
-import { tagClass, categoriaLabel, formatFecha, diasRestantes, estadoUrgencia, etiquetaCampo } from '../utils.js'
+import { tagClass, categoriaLabel, formatFecha, diasRestantes, estadoUrgencia, etiquetaCampo, puedeRenovar } from '../utils.js'
 import { useUser } from '../context/UserContext.jsx'
+import { useConfig } from '../context/ConfigContext.jsx'
+import RenovarModal from '../components/RenovarModal.jsx'
 
 export default function EmpresaDetail() {
   const { id } = useParams()
   const { user } = useUser()
+  const { ventana_renovacion_dias: ventanaRenovacion } = useConfig()
+  const [renovando, setRenovando] = useState(null)
   const [empresa, setEmpresa] = useState(null)
   const [tramites, setTramites] = useState([])
   const [auditoria, setAuditoria] = useState([])
@@ -138,7 +142,12 @@ export default function EmpresaDetail() {
                       <span className={tagClass(t.categoria)}>{categoriaLabel(t.categoria)}</span>
                     </div>
                     <div>
-                      {t.fecha_vencimiento ? (
+                      {t.renovado_por_id ? (
+                        <>
+                          <span className="tag tag-c0">Renovado</span>
+                          <div className="co-sub">{formatFecha(t.fecha_vencimiento)}</div>
+                        </>
+                      ) : t.fecha_vencimiento ? (
                         <>
                           <span className={`days ${urgencia.clase}`}>{urgencia.texto}</span>
                           <div className="co-sub">{formatFecha(t.fecha_vencimiento)}</div>
@@ -147,6 +156,25 @@ export default function EmpresaDetail() {
                         <span className="mono" style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
                           Sin vencimiento
                         </span>
+                      )}
+                      {t.renueva_a_id && <div className="co-sub">es una renovación</div>}
+                      {puedeRenovar({
+                        fecha_vencimiento: t.fecha_vencimiento,
+                        renovado: !!t.renovado_por_id,
+                        estatus: t.estatus_calculado,
+                        ventanaDias: ventanaRenovacion,
+                      }) && (
+                        <button
+                          type="button"
+                          className="btn-ghost"
+                          style={{ fontSize: 10.5, padding: '2px 8px', marginTop: 4 }}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setRenovando(t)
+                          }}
+                        >
+                          Renovar
+                        </button>
                       )}
                     </div>
                     <div className="mono" style={{ fontSize: 12 }}>
@@ -201,6 +229,18 @@ export default function EmpresaDetail() {
           </>
         )}
       </main>
+
+      {renovando && (
+        <RenovarModal
+          tramiteId={renovando.id}
+          tramiteNombre={renovando.tramite_nombre}
+          onClose={() => setRenovando(null)}
+          onRenovado={() => {
+            setRenovando(null)
+            cargar()
+          }}
+        />
+      )}
 
       {mostrarModal && (
         <NuevoTramiteModal
