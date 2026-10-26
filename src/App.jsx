@@ -6,6 +6,8 @@ import EmpresaDetail from './pages/EmpresaDetail.jsx'
 import Usuarios from './pages/Usuarios.jsx'
 import Importar from './pages/Importar.jsx'
 import Catalogo from './pages/Catalogo.jsx'
+import Plataforma from './pages/Plataforma.jsx'
+import PlataformaLogin from './pages/PlataformaLogin.jsx'
 import { isAuthenticated } from './api.js'
 import { UserProvider } from './context/UserContext.jsx'
 
@@ -18,6 +20,8 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/plataforma/login" element={<PlataformaLogin />} />
+      <Route path="/plataforma" element={<Plataforma />} />
       <Route
         path="/"
         element={
