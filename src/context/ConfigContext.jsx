@@ -8,6 +8,8 @@ const POR_DEFECTO = {
   logo_url: '',
   inactividad_minutos: 5,
   plazo_observacion_meses: 3,
+  ventana_renovacion_dias: 90,
+  dominio_base: '',
 }
 
 const ConfigContext = createContext(POR_DEFECTO)

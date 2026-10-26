@@ -1,5 +1,23 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
+// Empresa (tenant): sale del subdominio donde se abre la app (acme.miapp.com -> "acme", acme.localhost -> "acme").
+// Con un dominio sin subdominio (localhost, 127.0.0.1, miapp.com) no se manda nada y el backend usa su empresa por defecto.
+// Se puede forzar con VITE_TENANT.
+function tenantActual() {
+  if (import.meta.env.VITE_TENANT) return import.meta.env.VITE_TENANT
+  const host = window.location.hostname
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return null
+  const partes = host.split('.')
+  const base = import.meta.env.VITE_BASE_DOMAIN
+  if (base) return host.endsWith(`.${base}`) ? host.slice(0, -(base.length + 1)).split('.')[0] : null
+  if (partes.length >= 3 || (partes.length === 2 && partes[1] === 'localhost')) {
+    return ['www', 'app', 'admin', 'plataforma'].includes(partes[0]) ? null : partes[0]
+  }
+  return null
+}
+const tenant = tenantActual()
+const tenantHeaders = () => (tenant ? { 'X-Tenant': tenant } : {})
+
 function getToken() {
   return localStorage.getItem('expediente_token')
 }
@@ -12,7 +30,7 @@ function clearToken() {
 
 async function request(path, options = {}) {
   const token = getToken()
-  const headers = { 'Content-Type': 'application/json', ...(options.headers || {}) }
+  const headers = { 'Content-Type': 'application/json', ...tenantHeaders(), ...(options.headers || {}) }
   if (token) headers['Authorization'] = `Bearer ${token}`
 
   const res = await fetch(`${API_URL}${path}`, { ...options, headers })
@@ -37,7 +55,7 @@ export async function login(email, password) {
 
   const res = await fetch(`${API_URL}/auth/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...tenantHeaders() },
     body,
   })
   if (!res.ok) throw new Error('Correo o contraseña incorrectos')
@@ -72,6 +90,8 @@ export const createTramite = (data) =>
 export const getTramitesDeEmpresa = (id) => request(`/empresas/${id}/tramites`)
 export const updateTramite = (id, data) =>
   request(`/tramites/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
+export const renovarTramite = (id, data = {}) =>
+  request(`/tramites/${id}/renovar`, { method: 'POST', body: JSON.stringify(data) })
 export const deleteTramite = (id) => request(`/tramites/${id}`, { method: 'DELETE' })
 export const getAuditoriaTramite = (id) => request(`/tramites/${id}/auditoria`)
 export const getAuditoriaEmpresa = (id) => request(`/empresas/${id}/auditoria`)
@@ -83,7 +103,7 @@ export async function subirDocumento(tramiteId, tipo, archivo, observacionId = n
   if (observacionId) url += `&observacion_id=${encodeURIComponent(observacionId)}`
   const res = await fetch(url, {
     method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: { ...tenantHeaders(), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: formData,
   })
   if (!res.ok) {
@@ -104,7 +124,7 @@ export async function importarTramitesCsv(file) {
   formData.append('archivo', file)
   const res = await fetch(`${API_URL}/tramites/importar-csv`, {
     method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    headers: { ...tenantHeaders(), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: formData,
   })
   if (!res.ok) {
@@ -138,3 +158,54 @@ export const createTipoTramite = (data) =>
 export const updateTipoTramite = (id, data) =>
   request(`/tipos-tramite/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
 export const deleteTipoTramite = (id) => request(`/tipos-tramite/${id}`, { method: 'DELETE' })
+
+// ---------- Administración de la plataforma (empresas / subdominios) ----------
+// Sesión propia, separada de la de las empresas, y sin X-Tenant.
+const PLATAFORMA_TOKEN_KEY = 'plataforma_token'
+export const plataformaAutenticada = () => !!localStorage.getItem(PLATAFORMA_TOKEN_KEY)
+export const plataformaLogout = () => localStorage.removeItem(PLATAFORMA_TOKEN_KEY)
+
+async function plataformaRequest(path, options = {}) {
+  const token = localStorage.getItem(PLATAFORMA_TOKEN_KEY)
+  const res = await fetch(`${API_URL}/plataforma${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
+  })
+  if (res.status === 401 && token) {
+    plataformaLogout()
+    window.location.href = '/plataforma/login'
+    throw new Error('Sesión expirada')
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: 'Ocurrió un error inesperado' }))
+    const detalle = Array.isArray(err.detail) ? err.detail.map((d) => d.msg).join('. ') : err.detail
+    throw new Error(typeof detalle === 'string' ? detalle : 'Ocurrió un error inesperado')
+  }
+  return res.json()
+}
+
+export async function plataformaLogin(email, password) {
+  const body = new URLSearchParams()
+  body.append('username', email)
+  body.append('password', password)
+  const res = await fetch(`${API_URL}/plataforma/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
+  })
+  if (!res.ok) throw new Error('Correo o contraseña incorrectos')
+  const data = await res.json()
+  localStorage.setItem(PLATAFORMA_TOKEN_KEY, data.access_token)
+  return data
+}
+export const getEmpresasPlataforma = () => plataformaRequest('/empresas')
+export const crearEmpresaPlataforma = (data) =>
+  plataformaRequest('/empresas', { method: 'POST', body: JSON.stringify(data) })
+export const editarEmpresaPlataforma = (subdominio, data) =>
+  plataformaRequest(`/empresas/${subdominio}`, { method: 'PATCH', body: JSON.stringify(data) })
+export const restablecerPasswordEmpresa = (subdominio, data) =>
+  plataformaRequest(`/empresas/${subdominio}/restablecer-password`, { method: 'POST', body: JSON.stringify(data) })
